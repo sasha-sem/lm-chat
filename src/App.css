@@ -1,0 +1,7 @@
+#root {
+  width: 1000px;
+  margin: auto;
+  text-align: left;
+  display: flex;
+  align-items: center;
+}
