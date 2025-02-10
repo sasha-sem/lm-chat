@@ -2,14 +2,13 @@ import "/src/App.css"
 import { useRef, useState, useEffect } from "react";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { streamText } from "ai";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { Message } from "./components/Message";
 
 const LM_STUDIO_HOST = 'http://127.0.0.1:1234'
-const LM_STUDIO_DEFAULT_MODEL = 'meta-llama-3.1-8b-instruct'
+const LM_STUDIO_DEFAULT_MODEL = 'llama-3.2-1b-instruct'
 
 function App() {
-  const [text, setText] = useState("");
+  const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [models, setModels] = useState([{ id: LM_STUDIO_DEFAULT_MODEL }]);
@@ -51,7 +50,6 @@ function App() {
 
     try {
       setIsLoading(true);
-      setText("");
 
       const lmstudio = createOpenAICompatible({
         baseURL: `${LM_STUDIO_HOST}/v1`,
@@ -61,17 +59,20 @@ function App() {
         model: lmstudio(selectedModel),
         prompt: inputText,
         abortSignal: controller.signal,
+        onFinish: () => {
+          setIsLoading(false)
+          controllerRef.current = null
+        }
       });
 
-      for await (const chunk of result.textStream) {
-        setText((prev) => prev + chunk);
-      }
+      setInputText("")
+
+      setMessages([<Message key={messages.length + 1} stream={result.textStream} prompt={inputText} />].concat(messages))
+
     } catch (error) {
       if (error.name !== "AbortError") {
         console.error("Error:", error);
-        setText(`**Error:** ${error.message}`);
       }
-    } finally {
       setIsLoading(false);
       controllerRef.current = null;
     }
@@ -96,7 +97,10 @@ function App() {
       <form onSubmit={handleSubmit} style={{ marginBottom: "20px" }}>
         <select
           value={selectedModel}
-          onChange={(e) => setSelectedModel(e.target.value)}
+          onChange={(e) => {
+            setSelectedModel(e.target.value)
+            setMessages([])
+          }}
           style={{
             maxWidth: "50%",
             padding: "10px",
@@ -163,41 +167,7 @@ function App() {
           </button>
         </div>
       </form>
-
-      {text && (
-        <div
-          style={{
-            width: "100%",
-            background: "#f5f5f5",
-            padding: "10px",
-            borderRadius: "8px",
-            marginTop: "20px",
-          }}
-        >
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              code({ children, ...props }) {
-                return (
-                  <code
-                    {...props}
-                    style={{
-                      background: "#e9ecef",
-                      padding: "2px 4px",
-                      borderRadius: "4px",
-                      fontFamily: "monospace",
-                    }}
-                  >
-                    {children}
-                  </code>
-                );
-              },
-            }}
-          >
-            {text}
-          </ReactMarkdown>
-        </div>
-      )}
+      {messages}
     </div>
   );
 }
