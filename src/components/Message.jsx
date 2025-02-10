@@ -9,9 +9,16 @@ export function Message(props) {
 
     useEffect(() => {
         const handleStream = async () => {
-            for await (const chunk of props.stream) {
-                setText((prev) => prev + chunk);
+            try {
+                if (props.stream.locked) return;
+                for await (const chunk of props.stream) {
+                    setText((prev) => prev + chunk);
+                }
             }
+            catch (error) {
+                props.handleError(error)
+            }
+
         }
         handleStream()
     }, [props])
@@ -80,5 +87,6 @@ export function Message(props) {
 
 Message.propTypes = {
     stream: PropTypes.array,
-    prompt: PropTypes.string
+    prompt: PropTypes.string,
+    handleError: PropTypes.func
 };

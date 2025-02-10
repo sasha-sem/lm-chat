@@ -16,6 +16,8 @@ function App() {
     LM_STUDIO_DEFAULT_MODEL
   );
   const controllerRef = useRef(null);
+  const historyRef = useRef([]);
+
 
   const getModels = async () => {
     const url = `${LM_STUDIO_HOST}/api/v0/models`;
@@ -26,7 +28,6 @@ function App() {
       }
 
       const result = await response.json();
-      console.log(result);
       setModels(result.data.filter((item) => item.type === 'llm' && item.state === 'loaded'));
     } catch (error) {
       console.error(error.message);
@@ -50,6 +51,7 @@ function App() {
 
     try {
       setIsLoading(true);
+      historyRef.current.push({ role: 'user', content: inputText });
 
       const lmstudio = createOpenAICompatible({
         baseURL: `${LM_STUDIO_HOST}/v1`,
@@ -57,9 +59,10 @@ function App() {
 
       const result = await streamText({
         model: lmstudio(selectedModel),
-        prompt: inputText,
+        messages: historyRef.current,
         abortSignal: controller.signal,
-        onFinish: () => {
+        onFinish: ({ text }) => {
+          historyRef.current.push({ role: 'assistant', content: text });
           setIsLoading(false)
           controllerRef.current = null
         }
@@ -67,7 +70,20 @@ function App() {
 
       setInputText("")
 
-      setMessages([<Message key={messages.length + 1} stream={result.textStream} prompt={inputText} />].concat(messages))
+      setMessages([
+        <Message
+          key={messages.length + 1}
+          stream={result.textStream}
+          prompt={inputText}
+          handleError={(error) => {
+            if (error.name !== "AbortError") {
+              console.error("Error:", error);
+            }
+            setIsLoading(false);
+            controllerRef.current = null;
+          }}
+        />,
+        ...messages])
 
     } catch (error) {
       if (error.name !== "AbortError") {
@@ -85,6 +101,13 @@ function App() {
     }
   };
 
+
+
+  const clearHistory = async () => {
+    setMessages([])
+    historyRef.current = []
+  };
+
   return (
     <div
       style={{
@@ -99,7 +122,7 @@ function App() {
           value={selectedModel}
           onChange={(e) => {
             setSelectedModel(e.target.value)
-            setMessages([])
+            clearHistory()
           }}
           style={{
             maxWidth: "50%",
@@ -139,6 +162,7 @@ function App() {
           <button
             type="submit"
             style={{
+              width: "150px",
               padding: "10px 20px",
               backgroundColor: isLoading ? "#ccc" : "#007bff",
               color: "white",
@@ -149,6 +173,24 @@ function App() {
             disabled={isLoading}
           >
             {isLoading ? "Generating..." : "Send"}
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              clearHistory()
+            }}
+            style={{
+              padding: "10px 20px",
+              backgroundColor: isLoading ? "#ccc" : "#45854e",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: isLoading ? "not-allowed" : "pointer",
+            }}
+            disabled={isLoading}
+          >
+            {"Clear"}
           </button>
           <button
             type="button"
